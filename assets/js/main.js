@@ -200,85 +200,140 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ==========================================
-    // SPLASH SCREEN LOGIC (REBUILT)
+    // SPLASH SCREEN LOGIC
     // ==========================================
     if (isSplash) {
         const progressBar = document.querySelector('.progress-bar');
         const progressText = document.querySelector('.splash-footer');
         const startBtn = document.getElementById('start-btn');
         const progressContainer = document.querySelector('.progress-container');
-        const splashText = document.querySelector('.splash-text');
+        const splashTitle = document.querySelector('.splash-text');
 
-        // Simple, robust loading animation
-        let progress = 0;
-        const totalDuration = 2500; // 2.5 seconds
-        const intervalTime = 50;
-        const increment = 100 / (totalDuration / intervalTime);
-
-        const loadingInterval = setInterval(() => {
-            progress += increment;
+        // Check if we should skip animation (e.g. returning from Hub)
+        const sessionStarted = Storage.session.get('session_started');
+        
+        if (sessionStarted) {
+            // Skip loading, show button immediately
+            progressContainer.style.display = 'none';
+            progressText.style.display = 'none';
+            startBtn.classList.remove('hidden');
+            if (splashTitle) {
+                splashTitle.textContent = 'Pronto!';
+                splashTitle.setAttribute('data-text', 'Pronto!');
+            }
             
-            // Add some randomness to make it look "real"
-            if (Math.random() > 0.5) progress += Math.random() * 2;
+            // Fade in vignette if it was active
+            if (vignette) {
+                vignette.classList.add('vignette-active');
+                setTimeout(() => vignette.classList.remove('vignette-active'), 100);
+            }
+        } else {
+            // Run Natural/Random Loading Animation
+            let progress = 0;
+            const totalTime = 4000; // Reduced to 4s for better UX
+            const startTime = Date.now();
+            
+            function updateProgress() {
+                const elapsed = Date.now() - startTime;
+                
+                // Force finish if time is up
+                if (elapsed >= totalTime) {
+                    progress = 100;
+                    progressBar.style.width = '100%';
+                    progressText.textContent = '100%';
+                    setTimeout(showStartButton, 1000);
+                    return;
+                }
 
-            if (progress >= 100) {
-                progress = 100;
-                clearInterval(loadingInterval);
-                finishLoading();
+                // Calculate expected linear progress
+                const expected = (elapsed / totalTime) * 100;
+                
+                // Natural Loading Logic:
+                // 1. Base increment (slow crawl)
+                let increment = 0.05; 
+                
+                // 2. Random bursts (simulating resource loading)
+                if (Math.random() < 0.03) increment += Math.random() * 3.0; 
+                
+                // 3. Stalls (simulating heavy processing)
+                if (Math.random() < 0.05) increment = 0; 
+                
+                // 4. Catch up logic: if we are far behind expected, speed up significantly
+                if (progress < expected - 15) increment += 0.5;
+                
+                // 5. Slow down logic: if we are ahead, slow down or stop
+                if (progress > expected + 5) increment = 0;
+
+                progress += increment;
+                
+                // Clamp to 100
+                if (progress > 100) progress = 100;
+                
+                // Update UI
+                progressBar.style.width = `${progress}%`;
+                progressText.textContent = `${Math.floor(progress)}%`;
+                
+                if (progress < 100) {
+                    requestAnimationFrame(updateProgress);
+                } else {
+                    setTimeout(showStartButton, 1000);
+                }
+            }
+            
+            requestAnimationFrame(updateProgress);
+        }
+
+        function showStartButton() {
+            progressContainer.style.display = 'none';
+            progressText.style.display = 'none';
+            startBtn.classList.remove('hidden');
+            if (splashTitle) {
+                splashTitle.textContent = 'Pronto!';
+                splashTitle.setAttribute('data-text', 'Pronto!');
+            }
+        }
+
+        // Start Interaction
+        startBtn.addEventListener('click', (e) => {
+            // Mobile check for start button (if double tap logic didn't catch it or if we want to be safe)
+            // The setupDoubleTap is only called in Hub, let's add it here for Splash too if needed.
+            // But wait, setupDoubleTap is defined inside the Hub block? No, I should move it out.
+            
+            // 1. Confetti (Check if system exists)
+            if (typeof confettiSystem !== 'undefined') {
+                const rect = startBtn.getBoundingClientRect();
+                const centerX = rect.left + rect.width / 2;
+                const centerY = rect.top + rect.height / 2;
+                confettiSystem.burst(centerX, centerY);
             }
 
-            updateUI(progress);
-        }, intervalTime);
+            // 2. Vignette & Navigate
+            vignette.classList.add('vignette-active');
+            
+            // Save state
+            Storage.session.set('session_started', true);
 
-        function updateUI(percent) {
-            if (progressBar) progressBar.style.width = `${percent}%`;
-            if (progressText) progressText.textContent = `${Math.floor(percent)}%`;
-        }
-
-        function finishLoading() {
             setTimeout(() => {
-                if (progressContainer) progressContainer.style.display = 'none';
-                if (progressText) progressText.style.display = 'none';
-                
-                if (splashText) splashText.textContent = "Tudo pronto!";
-                
-                if (startBtn) {
-                    startBtn.classList.remove('hidden');
-                    // Add a small pop animation class if you have one, or just rely on CSS transition
-                    startBtn.style.animation = "popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)";
-                }
-            }, 500);
-        }
-
-        // Start Button Interaction
-        if (startBtn) {
+                // Navigate to Hub
+                window.location.href = 'assets/html/hub.html';
+            }, 1000);
+        });
+        
+        // Setup mobile tap for start button specifically
+        const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+        if (isTouch) {
             startBtn.addEventListener('click', (e) => {
-                e.preventDefault(); // Prevent double firing on some touch devices
-                
-                // 1. Visual Feedback
-                startBtn.textContent = "Entrando...";
-                startBtn.style.transform = "scale(0.95)";
-                
-                // 2. Confetti Burst (Safe check)
-                if (typeof confettiSystem !== 'undefined' && confettiSystem.burst) {
-                    const rect = startBtn.getBoundingClientRect();
-                    confettiSystem.burst(rect.left + rect.width / 2, rect.top + rect.height / 2);
+                if (!startBtn.classList.contains('hover-active')) {
+                    e.preventDefault();
+                    e.stopImmediatePropagation(); // Stop the main click handler
+                    startBtn.classList.add('hover-active');
                 }
-
-                // 3. Transition
-                if (vignette) vignette.classList.add('vignette-active');
-
-                // 4. Navigate (Delay for effect)
-                setTimeout(() => {
-                    // Try to save state, but don't block navigation if it fails
-                    try {
-                        if (typeof AppStorage !== 'undefined') {
-                            AppStorage.session.set('session_started', true);
-                        }
-                    } catch (e) { console.warn('Storage warning:', e); }
-
-                    window.location.href = 'assets/html/hub.html';
-                }, 800);
+            });
+            
+            document.addEventListener('click', (e) => {
+                if (!startBtn.contains(e.target)) {
+                    startBtn.classList.remove('hover-active');
+                }
             });
         }
     }
