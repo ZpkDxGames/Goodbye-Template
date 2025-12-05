@@ -210,7 +210,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const splashTitle = document.querySelector('.splash-text');
 
         // Check if we should skip animation (e.g. returning from Hub)
-        const sessionStarted = AppStorage.session.get('session_started');
+        let sessionStarted = false;
+        if (typeof AppStorage !== 'undefined') {
+            sessionStarted = AppStorage.session.get('session_started');
+        } else {
+            console.warn('AppStorage is not defined. storage.js might not be loaded.');
+        }
         
         if (sessionStarted) {
             // Skip loading, show button immediately
@@ -311,7 +316,9 @@ document.addEventListener('DOMContentLoaded', () => {
             vignette.classList.add('vignette-active');
             
             // Save state
-            AppStorage.session.set('session_started', true);
+            if (typeof AppStorage !== 'undefined') {
+                AppStorage.session.set('session_started', true);
+            }
 
             setTimeout(() => {
                 // Navigate to Hub
