@@ -211,21 +211,27 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Check if we should skip animation (e.g. returning from Hub)
         let sessionStarted = false;
-        if (typeof AppStorage !== 'undefined') {
-            sessionStarted = AppStorage.session.get('session_started');
-        } else {
-            console.warn('AppStorage is not defined. storage.js might not be loaded.');
+        try {
+            if (typeof AppStorage !== 'undefined') {
+                sessionStarted = AppStorage.session.get('session_started');
+            }
+        } catch (e) {
+            console.warn('Storage check failed:', e);
         }
         
-        if (sessionStarted) {
-            // Skip loading, show button immediately
-            progressContainer.style.display = 'none';
-            progressText.style.display = 'none';
-            startBtn.classList.remove('hidden');
+        function showStartButton() {
+            if (progressContainer) progressContainer.style.display = 'none';
+            if (progressText) progressText.style.display = 'none';
+            if (startBtn) startBtn.classList.remove('hidden');
             if (splashTitle) {
                 splashTitle.textContent = 'Pronto!';
                 splashTitle.setAttribute('data-text', 'Pronto!');
             }
+        }
+
+        if (sessionStarted) {
+            // Skip loading, show button immediately
+            showStartButton();
             
             // Fade in vignette if it was active
             if (vignette) {
@@ -233,115 +239,69 @@ document.addEventListener('DOMContentLoaded', () => {
                 setTimeout(() => vignette.classList.remove('vignette-active'), 100);
             }
         } else {
-            // Run Natural/Random Loading Animation
+            // Run Loading Animation
             let progress = 0;
-            const totalTime = 4000; // Reduced to 4s for better UX
-            const startTime = Date.now();
-            
-            function updateProgress() {
-                const elapsed = Date.now() - startTime;
-                
-                // Force finish if time is up
-                if (elapsed >= totalTime) {
-                    progress = 100;
-                    progressBar.style.width = '100%';
-                    progressText.textContent = '100%';
-                    setTimeout(showStartButton, 1000);
-                    return;
-                }
-
-                // Calculate expected linear progress
-                const expected = (elapsed / totalTime) * 100;
-                
-                // Natural Loading Logic:
-                // 1. Base increment (slow crawl)
-                let increment = 0.05; 
-                
-                // 2. Random bursts (simulating resource loading)
-                if (Math.random() < 0.03) increment += Math.random() * 3.0; 
-                
-                // 3. Stalls (simulating heavy processing)
-                if (Math.random() < 0.05) increment = 0; 
-                
-                // 4. Catch up logic: if we are far behind expected, speed up significantly
-                if (progress < expected - 15) increment += 0.5;
-                
-                // 5. Slow down logic: if we are ahead, slow down or stop
-                if (progress > expected + 5) increment = 0;
-
-                progress += increment;
-                
-                // Clamp to 100
+            const interval = setInterval(() => {
+                // Random increment
+                progress += Math.random() * 5;
                 if (progress > 100) progress = 100;
-                
-                // Update UI
-                progressBar.style.width = `${progress}%`;
-                progressText.textContent = `${Math.floor(progress)}%`;
-                
-                if (progress < 100) {
-                    requestAnimationFrame(updateProgress);
-                } else {
-                    setTimeout(showStartButton, 1000);
-                }
-            }
-            
-            requestAnimationFrame(updateProgress);
-        }
 
-        function showStartButton() {
-            progressContainer.style.display = 'none';
-            progressText.style.display = 'none';
-            startBtn.classList.remove('hidden');
-            if (splashTitle) {
-                splashTitle.textContent = 'Pronto!';
-                splashTitle.setAttribute('data-text', 'Pronto!');
-            }
+                if (progressBar) progressBar.style.width = `${progress}%`;
+                if (progressText) progressText.textContent = `${Math.floor(progress)}%`;
+
+                if (progress >= 100) {
+                    clearInterval(interval);
+                    setTimeout(showStartButton, 500);
+                }
+            }, 100);
         }
 
         // Start Interaction
-        startBtn.addEventListener('click', (e) => {
-            // Mobile check for start button (if double tap logic didn't catch it or if we want to be safe)
-            // The setupDoubleTap is only called in Hub, let's add it here for Splash too if needed.
-            // But wait, setupDoubleTap is defined inside the Hub block? No, I should move it out.
-            
-            // 1. Confetti (Check if system exists)
-            if (typeof confettiSystem !== 'undefined') {
-                const rect = startBtn.getBoundingClientRect();
-                const centerX = rect.left + rect.width / 2;
-                const centerY = rect.top + rect.height / 2;
-                confettiSystem.burst(centerX, centerY);
-            }
-
-            // 2. Vignette & Navigate
-            vignette.classList.add('vignette-active');
-            
-            // Save state
-            if (typeof AppStorage !== 'undefined') {
-                AppStorage.session.set('session_started', true);
-            }
-
-            setTimeout(() => {
-                // Navigate to Hub
-                window.location.href = 'assets/html/hub.html';
-            }, 1000);
-        });
-        
-        // Setup mobile tap for start button specifically
-        const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-        if (isTouch) {
+        if (startBtn) {
             startBtn.addEventListener('click', (e) => {
-                if (!startBtn.classList.contains('hover-active')) {
-                    e.preventDefault();
-                    e.stopImmediatePropagation(); // Stop the main click handler
-                    startBtn.classList.add('hover-active');
+                // 1. Confetti (Check if system exists)
+                if (typeof confettiSystem !== 'undefined') {
+                    const rect = startBtn.getBoundingClientRect();
+                    const centerX = rect.left + rect.width / 2;
+                    const centerY = rect.top + rect.height / 2;
+                    confettiSystem.burst(centerX, centerY);
                 }
+
+                // 2. Vignette & Navigate
+                if (vignette) vignette.classList.add('vignette-active');
+                
+                // Save state
+                try {
+                    if (typeof AppStorage !== 'undefined') {
+                        AppStorage.session.set('session_started', true);
+                    }
+                } catch (e) {
+                    console.warn('Storage save failed:', e);
+                }
+
+                setTimeout(() => {
+                    // Navigate to Hub
+                    window.location.href = 'assets/html/hub.html';
+                }, 1000);
             });
             
-            document.addEventListener('click', (e) => {
-                if (!startBtn.contains(e.target)) {
-                    startBtn.classList.remove('hover-active');
-                }
-            });
+            // Setup mobile tap for start button specifically
+            const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+            if (isTouch) {
+                startBtn.addEventListener('click', (e) => {
+                    if (!startBtn.classList.contains('hover-active')) {
+                        e.preventDefault();
+                        e.stopImmediatePropagation(); // Stop the main click handler
+                        startBtn.classList.add('hover-active');
+                    }
+                });
+                
+                document.addEventListener('click', (e) => {
+                    if (!startBtn.contains(e.target)) {
+                        startBtn.classList.remove('hover-active');
+                    }
+                });
+            }
         }
     }
 });
