@@ -532,6 +532,7 @@ header {
     display: flex;
     flex-direction: column;
     padding: 20px;
+    overflow-y: auto; /* Enable scrolling for sidebar content */
 }
 
 .sidebar-open #sidebar {
